@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#FFD600">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Park-Q | Intelligent Parking</title>
+    
+    <!-- Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800&family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            yellow: '#FFD600', // Signature Yellow
+                            dark: '#0A0A0A',   // Deep Black
+                            gray: '#1F1F1F',   // Soft Black
+                            light: '#F8F9FA',  // Clean White
+                            surface: '#FFFFFF'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Prompt', 'sans-serif'],
+                        display: ['Outfit', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'glow': '0 0 20px rgba(255, 214, 0, 0.4)',
+                        'float': '0 10px 30px rgba(0,0,0,0.08)',
+                        'inner-light': 'inset 0 2px 4px 0 rgba(255, 255, 255, 0.3)'
+                    },
+                    animation: {
+                        'float': 'float 3s ease-in-out infinite',
+                        'scan': 'scan 2s linear infinite',
+                        'pulse-soft': 'pulseSoft 2s infinite',
+                    },
+                    keyframes: {
+                        float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-5px)' } },
+                        scan: { '0%': { top: '0%' }, '100%': { top: '100%' } },
+                        pulseSoft: { '0%, 100%': { opacity: '1' }, '50%': { opacity: '0.7' } }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body { 
+            background-color: #F8F9FA; 
+            font-family: 'Prompt', sans-serif; 
+            -webkit-tap-highlight-color: transparent;
+            overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile */
+        }
+        
+        /* Modern Scrollbar */
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Glassmorphism */
+        .glass {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+        
+        .glass-dark {
+            background: rgba(20, 20, 20, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Interactions */
+        .btn-press:active { transform: scale(0.96); }
+        .input-modern { 
+            background: #F3F4F6; 
+            border: 2px solid transparent; 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+        }
+        .input-modern:focus { 
+            background: #FFFFFF; 
+            border-color: #FFD600; 
+            box-shadow: 0 0 0 4px rgba(255, 214, 0, 0.15); 
+            outline: none; 
+        }
+
+        /* View Management */
+        .view { display: none; opacity: 0; transition: opacity 0.3s ease; }
+        .view.active { display: flex; opacity: 1; }
+        
+        /* Camera Overlay */
+        .scan-grid {
+            background-image: linear-gradient(rgba(255, 255, 255, 0.1) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+            background-size: 40px 40px;
+        }
+
+        /* Desktop Container (Clean) */
+        @media (min-width: 640px) {
+            body {
+                background-color: #f3f4f6;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+            #app-root {
+                max-width: 420px;
+                height: 100vh;
+                margin: 0 auto;
+                box-shadow: 0 0 40px rgba(0,0,0,0.1);
+            }
+        }
+    </style>
+</head>
+<body class="text-brand-dark min-h-screen flex flex-col fixed inset-0 w-full h-full">
+
+    <!-- GLOBAL TOAST -->
+    <div id="toast" class="fixed top-12 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 transform -translate-y-32 opacity-0 flex items-center gap-3 px-5 py-3 rounded-full shadow-2xl glass-dark text-white min-w-[200px] justify-center">
+        <div class="w-6 h-6 rounded-full bg-brand-yellow flex items-center justify-center text-brand-dark text-xs"><i class="fas fa-check"></i></div>
+        <span class="font-medium text-sm tracking-wide">Notification</span>
+    </div>
+
+    <!-- App Content Wrapper -->
+    <div id="app-root" class="flex-grow w-full bg-white min-h-screen relative overflow-y-auto hide-scroll">
+
+        <!-- VIEW 1: SPLASH SCREEN -->
+        <div id="loading-view" class="view active flex-col items-center justify-center h-full bg-brand-dark z-50 text-white absolute inset-0">
+            <div class="relative w-32 h-32 mb-8">
+                <div class="absolute inset-0 bg-brand-yellow rounded-full blur-[40px] opacity-20 animate-pulse"></div>
+                <div class="relative bg-brand-yellow w-full h-full rounded-[2rem] flex items-center justify-center shadow-glow animate-float">
+                    <i class="fas fa-car-side text-5xl text-brand-dark"></i>
+                </div>
+            </div>
+            <h1 class="text-4xl font-display font-bold tracking-tighter mb-2">Park<span class="text-brand-yellow">Q</span></h1>
+            <div class="flex items-center gap-2 text-xs font-mono text-gray-400">
+                <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                SYSTEM ONLINE
+            </div>
+        </div>
+
+        <!-- VIEW 2: LOGIN -->
+        <div id="login-view" class="view flex-col h-full bg-white relative overflow-hidden">
+            <div class="absolute top-[-20%] right-[-20%] w-[80%] h-[50%] bg-brand-yellow rounded-full blur-[100px] opacity-20"></div>
+            
+            <div class="flex-1 flex flex-col justify-center px-8 relative z-10">
+                <div class="mb-10">
+                    <div class="w-16 h-16 bg-brand-dark rounded-2xl flex items-center justify-center text-brand-yellow text-2xl mb-6 shadow-float">
+                        <i class="fas fa-parking"></i>
+                    </div>
+                    <h1 class="text-4xl font-bold font-display text-brand-dark leading-tight mb-2">Welcome<br>Back</h1>
+                    <p class="text-gray-400">Sign in to manage your parking.</p>
+                </div>
+
+                <div class="space-y-5">
+                    <div class="group">
+                        <label class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Email</label>
+                        <input type="email" id="email" class="input-modern w-full px-5 py-4 rounded-2xl text-brand-dark font-medium" placeholder="hello@park-q.com">
+                    </div>
+                    <div class="group">
+                        <label class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Password</label>
+                        <input type="password" id="password" class="input-modern w-full px-5 py-4 rounded-2xl text-brand-dark font-medium" placeholder="••••••••">
+                    </div>
+                    
+                    <button id="auth-action-btn" class="w-full bg-brand-dark text-white font-bold py-4 rounded-2xl shadow-lg hover:shadow-xl btn-press transition-all flex justify-between items-center px-6 mt-4">
+                        <span>เข้าสู่ระบบ</span>
+                        <div class="w-8 h-8 bg-white/10 rounded-full flex items-center justify-center"><i class="fas fa-arrow-right text-sm"></i></div>
+                    </button>
+
+                    <div class="relative py-2">
+                        <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-gray-100"></div></div>
+                        <div class="relative flex justify-center text-xs text-gray-400 bg-white px-4">หรือ</div>
+                    </div>
+
+                    <button id="google-signin-btn" class="w-full border-2 border-gray-100 bg-white text-gray-600 font-bold py-3.5 rounded-2xl btn-press flex items-center justify-center gap-3 transition-colors hover:border-brand-yellow hover:text-brand-dark">
+                        <img src="https://www.svgrepo.com/show/475656/google-color.svg" class="w-5 h-5">
+                        <span>ดำเนินการต่อด้วย Google</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="p-6 text-center">
+                <button id="toggle-auth-btn" class="text-sm font-medium text-gray-500 hover:text-brand-dark transition">
+                    ยังไม่มีบัญชี? <span class="text-brand-dark font-bold underline decoration-brand-yellow decoration-2">สมัครสมาชิก</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- VIEW 3: MAIN APP (DASHBOARD) -->
+        <div id="dashboard-view" class="view flex-col h-full bg-brand-light relative">
+            <!-- Header -->
+            <header class="pt-12 pb-4 px-6 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-20">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-brand-yellow to-orange-400 p-[2px]">
+                        <div class="w-full h-full bg-white rounded-full flex items-center justify-center overflow-hidden">
+                            <i class="fas fa-user text-gray-400"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <h2 class="text-sm font-bold text-gray-400 uppercase tracking-wider">Hello,</h2>
+                        <h1 class="text-lg font-bold text-brand-dark leading-none" id="user-email">User</h1>
+                    </div>
+                </div>
+                <div class="flex gap-3">
+                    <button id="noti-btn" class="w-10 h-10 rounded-full bg-white border border-gray-100 shadow-sm flex items-center justify-center text-gray-600 btn-press relative">
+                        <i class="far fa-bell"></i>
+                        <span id="noti-badge" class="hidden absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Content Scroll Area -->
+            <main class="flex-1 overflow-y-auto px-6 pb-24 space-y-8 pt-4 hide-scroll">
+                
+                <!-- Dynamic Island: Parking Status -->
+                <section id="parking-status-card" class="bg-brand-dark text-white rounded-[2rem] p-1 shadow-float overflow-hidden transition-all duration-500 relative group">
+                    <!-- BG Effects -->
+                    <div class="absolute top-0 right-0 w-32 h-32 bg-brand-yellow rounded-full blur-[60px] opacity-20"></div>
+                    
+                    <!-- State: Empty -->
+                    <div id="park-now-section" class="py-10 px-6 text-center relative z-10">
+                        <div class="w-20 h-20 mx-auto bg-white/5 rounded-full flex items-center justify-center border border-white/10 mb-4 group-hover:scale-110 transition duration-500">
+                            <i class="fas fa-map-pin text-3xl text-brand-yellow animate-float"></i>
+                        </div>
+                        <h2 class="text-2xl font-display font-bold mb-2">ยังไม่บันทึกที่จอด</h2>
+                        <p class="text-white/50 text-sm mb-8">ช่วยจำตำแหน่งจอดรถของคุณด้วย AI</p>
+                        <button id="show-park-form-btn" class="w-full bg-brand-yellow text-brand-dark font-bold py-4 rounded-2xl shadow-glow btn-press flex items-center justify-center gap-3">
+                            <i class="fas fa-camera"></i>
+                            <span>Snap & Park</span>
+                        </button>
+                    </div>
+
+                    <!-- State: Parked -->
+                    <div id="parked-info-section" class="hidden relative z-10">
+                        <div class="h-48 relative">
+                            <img id="parked-image" src="" class="w-full h-full object-cover opacity-80">
+                            <div class="absolute inset-0 bg-gradient-to-t from-brand-dark to-transparent"></div>
+                            <div class="absolute bottom-4 left-6 right-6 flex justify-between items-end">
+                                <div>
+                                    <div class="text-xs font-bold text-brand-yellow uppercase tracking-widest mb-1">PARKED AT</div>
+                                    <div class="text-3xl font-display font-bold" id="parked-location">...</div>
+                                </div>
+                                <div class="bg-white/10 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/20 text-xs font-mono">
+                                    <i class="far fa-clock mr-1"></i> <span id="park-timer">00:00</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="p-6 bg-brand-dark">
+                            <div class="grid grid-cols-2 gap-4 mb-6">
+                                <div class="bg-white/5 rounded-2xl p-4 border border-white/5">
+                                    <div class="text-xs text-gray-400 mb-1">FLOOR</div>
+                                    <div class="text-2xl font-bold text-brand-yellow" id="parked-floor">-</div>
+                                </div>
+                                <div class="bg-white/5 rounded-2xl p-4 border border-white/5">
+                                    <div class="text-xs text-gray-400 mb-1">ZONE</div>
+                                    <div class="text-2xl font-bold text-white" id="parked-pillar">-</div>
+                                </div>
+                            </div>
+                            <button id="clear-parking-btn" class="w-full py-4 border border-white/20 text-white rounded-2xl font-bold hover:bg-white/10 transition btn-press text-sm">
+                                CHECK OUT (เอารถออก)
+                            </button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- My Cars -->
+                <section>
+                    <div class="flex justify-between items-center mb-4 px-2">
+                        <h3 class="text-lg font-bold text-brand-dark">My Garage</h3>
+                        <button id="show-add-car-btn" class="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center text-brand-dark shadow-sm btn-press">
+                            <i class="fas fa-plus text-xs"></i>
+                        </button>
+                    </div>
+                    <div id="car-list" class="space-y-4 pb-12">
+                        <!-- Car Cards Injected Here -->
+                    </div>
+                </section>
+            </main>
+
+            <!-- Bottom Nav -->
+            <nav class="bg-white border-t border-gray-100 px-6 py-3 pb-safe flex justify-around items-center sticky bottom-0 z-30">
+                <button class="flex flex-col items-center gap-1 text-brand-yellow transition">
+                    <i class="fas fa-home text-xl"></i>
+                    <span class="text-[10px] font-bold">Home</span>
+                </button>
+                <button onclick="document.getElementById('logout-btn').click()" class="flex flex-col items-center gap-1 text-gray-300 hover:text-brand-dark transition">
+                    <i class="fas fa-sign-out-alt text-xl"></i>
+                    <span class="text-[10px] font-medium">Logout</span>
+                </button>
+                <!-- Hidden logout trigger for logic consistency -->
+                <button id="logout-btn" class="hidden"></button>
+            </nav>
+
+            <!-- CAMERA OVERLAY (Parking Form) -->
+            <div id="parking-form" class="fixed inset-0 z-50 bg-black hidden flex-col">
+                <div class="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-20 text-white">
+                    <h3 class="font-bold text-lg drop-shadow-md">Scan Location</h3>
+                    <button id="cancel-parking-btn" class="w-10 h-10 rounded-full bg-white/20 backdrop-blur flex items-center justify-center"><i class="fas fa-times"></i></button>
+                </div>
+                
+                <div class="flex-1 relative bg-gray-900 overflow-hidden">
+                    <!-- Camera Viewfinder UI -->
+                    <div class="absolute inset-0 scan-grid opacity-30"></div>
+                    <div class="absolute top-1/4 left-8 right-8 bottom-1/3 border-2 border-brand-yellow/50 rounded-3xl">
+                        <div class="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-brand-yellow rounded-tl-xl -mt-1 -ml-1"></div>
+                        <div class="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-brand-yellow rounded-tr-xl -mt-1 -mr-1"></div>
+                        <div class="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-brand-yellow rounded-bl-xl -mb-1 -ml-1"></div>
+                        <div class="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-brand-yellow rounded-br-xl -mb-1 -mr-1"></div>
+                    </div>
+                    <img id="image-preview" class="absolute inset-0 w-full h-full object-cover hidden z-10">
+                    
+                    <label class="absolute inset-0 flex flex-col items-center justify-center cursor-pointer z-20" id="camera-trigger">
+                        <input type="file" id="park-image-upload" accept="image/*" capture="environment" class="hidden">
+                        <!-- Shutter Button -->
+                        <div class="absolute bottom-12 left-1/2 -translate-x-1/2 w-20 h-20 rounded-full border-4 border-white flex items-center justify-center">
+                            <div class="w-16 h-16 bg-white rounded-full transition-transform active:scale-90"></div>
+                        </div>
+                        <p class="absolute bottom-36 text-white/80 text-sm font-medium bg-black/50 px-4 py-1 rounded-full backdrop-blur">แตะเพื่อถ่ายรูปเสา</p>
+                    </label>
+                </div>
+
+                <!-- Manual Input Sheet -->
+                <div class="bg-white rounded-t-3xl p-6 -mt-6 relative z-30">
+                    <div class="w-12 h-1.5 bg-gray-200 rounded-full mx-auto mb-6"></div>
+                    <div id="gps-status" class="flex items-center gap-2 text-xs font-bold text-gray-400 mb-4 uppercase tracking-wide">
+                        <i class="fas fa-satellite-dish text-brand-yellow animate-pulse"></i> GPS Connecting...
+                    </div>
+                    <div class="space-y-4">
+                        <input type="text" id="park-location" placeholder="Location Name" class="input-modern w-full px-4 py-3 rounded-xl">
+                        <div class="grid grid-cols-2 gap-4">
+                            <input type="text" id="park-floor" placeholder="Floor" class="input-modern w-full px-4 py-3 rounded-xl">
+                            <input type="text" id="park-pillar" placeholder="Zone" class="input-modern w-full px-4 py-3 rounded-xl">
+                        </div>
+                        <button id="save-parking-btn" class="w-full bg-brand-dark text-white font-bold py-4 rounded-xl shadow-lg mt-2 btn-press">
+                            CONFIRM PARKING
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 4: ADD CAR -->
+        <div id="add-car-view" class="view flex-col h-full bg-white">
+            <div class="pt-12 px-6 pb-6 border-b border-gray-50 flex items-center gap-4">
+                <button id="cancel-add-car-btn" class="w-10 h-10 rounded-full border border-gray-200 flex items-center justify-center text-brand-dark btn-press"><i class="fas fa-arrow-left"></i></button>
+                <h1 class="text-xl font-bold">New Vehicle</h1>
+            </div>
+            <div class="p-6 space-y-6">
+                <div class="bg-brand-light p-8 rounded-[2rem] text-center border-2 border-dashed border-gray-200">
+                    <i class="fas fa-car text-4xl text-gray-300 mb-3 block"></i>
+                    <p class="text-gray-400 text-sm">เพิ่มข้อมูลรถเพื่อสร้าง QR Code</p>
+                </div>
+                
+                <div class="space-y-4">
+                    <div class="group">
+                        <label class="text-xs font-bold text-gray-400 uppercase ml-1 mb-1 block">ชื่อรถ</label>
+                        <input type="text" id="car-name" class="input-modern w-full px-5 py-4 rounded-2xl font-medium" placeholder="เช่น น้องขาว">
+                    </div>
+                    <div class="group">
+                        <label class="text-xs font-bold text-gray-400 uppercase ml-1 mb-1 block">เลขทะเบียน</label>
+                        <input type="text" id="car-plate" class="input-modern w-full px-5 py-4 rounded-2xl font-mono tracking-wider font-bold text-lg uppercase" placeholder="กข 9999">
+                    </div>
+                    
+                    <div class="bg-brand-yellow/5 p-5 rounded-2xl border border-brand-yellow/20 mt-2">
+                        <div class="flex items-center gap-2 mb-4">
+                            <div class="w-6 h-6 rounded bg-brand-yellow flex items-center justify-center text-brand-dark text-xs"><i class="fas fa-bell"></i></div>
+                            <span class="font-bold text-sm text-brand-dark">แจ้งเตือนต่ออายุ</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="text-[10px] font-bold text-gray-400 uppercase mb-1 block">พรบ.</label>
+                                <input type="date" id="car-prb-date" class="w-full bg-white rounded-xl border-none px-3 py-2 text-xs shadow-sm">
+                            </div>
+                            <div>
+                                <label class="text-[10px] font-bold text-gray-400 uppercase mb-1 block">ประกัน</label>
+                                <input type="date" id="car-ins-date" class="w-full bg-white rounded-xl border-none px-3 py-2 text-xs shadow-sm">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex-1"></div>
+                <button id="save-car-btn" class="w-full bg-brand-dark text-white font-bold py-4 rounded-2xl shadow-lg btn-press">บันทึกข้อมูล</button>
+            </div>
+        </div>
+
+        <!-- VIEW 5: PUBLIC CONTACT (DARK MODE) -->
+        <div id="contact-view" class="view flex-col h-full bg-brand-dark text-white relative overflow-hidden">
+            <!-- Ambient BG -->
+            <div class="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-brand-gray to-transparent z-0"></div>
+            <div class="absolute -top-20 -right-20 w-64 h-64 bg-brand-yellow rounded-full blur-[100px] opacity-10"></div>
+
+            <div class="relative z-10 flex-1 flex flex-col p-8 pt-16">
+                <!-- Header Info -->
+                <div class="text-center mb-12">
+                    <div class="inline-block p-1 rounded-full bg-gradient-to-br from-brand-yellow to-transparent mb-6">
+                        <div class="w-24 h-24 bg-brand-gray rounded-full flex items-center justify-center border-4 border-brand-dark shadow-2xl relative">
+                            <i class="fas fa-shield-alt text-4xl text-brand-yellow"></i>
+                            <div class="absolute bottom-0 right-0 w-8 h-8 bg-green-500 border-4 border-brand-dark rounded-full"></div>
+                        </div>
+                    </div>
+                    <h1 class="text-3xl font-display font-bold mb-2">Secure Contact</h1>
+                    <div class="inline-block bg-white/10 backdrop-blur px-6 py-2 rounded-full border border-white/10">
+                        <span class="text-brand-yellow font-mono text-xl font-bold tracking-widest" id="contact-car-plate">...</span>
+                    </div>
+                    <p class="text-gray-500 text-sm mt-4 max-w-xs mx-auto">ติดต่อเจ้าของรถผ่านระบบกลาง<br>ปลอดภัย 100% ไม่เปิดเผยเบอร์โทร</p>
+                </div>
+
+                <!-- Action Buttons -->
+                <div id="reason-selection" class="space-y-4">
+                    <button data-reason="blocking" class="w-full group bg-gradient-to-r from-red-600 to-red-800 p-[1px] rounded-2xl btn-press">
+                        <div class="bg-brand-gray rounded-2xl p-6 flex items-center gap-5 h-full group-hover:bg-opacity-90 transition">
+                            <div class="w-14 h-14 bg-red-500/20 rounded-full flex items-center justify-center text-red-500 text-2xl shadow-[0_0_15px_rgba(239,68,68,0.3)] animate-pulse">
+                                <i class="fas fa-phone-alt"></i>
+                            </div>
+                            <div class="text-left">
+                                <h3 class="font-bold text-xl text-white">Emergency Call</h3>
+                                <p class="text-xs text-gray-400 mt-1">รถจอดขวาง / เหตุฉุกเฉิน</p>
+                            </div>
+                        </div>
+                    </button>
+
+                    <button data-reason="lights" class="w-full group bg-gradient-to-r from-brand-yellow to-orange-500 p-[1px] rounded-2xl btn-press">
+                        <div class="bg-brand-gray rounded-2xl p-6 flex items-center gap-5 h-full group-hover:bg-opacity-90 transition">
+                            <div class="w-14 h-14 bg-brand-yellow/20 rounded-full flex items-center justify-center text-brand-yellow text-2xl">
+                                <i class="fas fa-comment-alt"></i>
+                            </div>
+                            <div class="text-left">
+                                <h3 class="font-bold text-xl text-white">Send Message</h3>
+                                <p class="text-xs text-gray-400 mt-1">แจ้งลืมปิดไฟ / หน้าต่าง / ยางแบน</p>
+                            </div>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- Call UI (Hidden) -->
+                <div id="blocking-form" class="hidden flex-1 flex flex-col items-center justify-center">
+                    <h3 class="text-xl font-bold mb-2">เบอร์โทรศัพท์ของคุณ</h3>
+                    <p class="text-xs text-gray-500 mb-8">เพื่อให้เจ้าของรถติดต่อกลับ (ระบบจะปกปิดเบอร์)</p>
+                    
+                    <input type="tel" id="contact-phone" class="w-full max-w-xs bg-white/5 border border-white/10 text-white text-center text-3xl font-bold py-6 rounded-3xl mb-8 focus:border-brand-yellow focus:bg-white/10 outline-none font-mono" placeholder="08x-xxx-xxxx">
+                    
+                    <div class="w-full space-y-4">
+                        <button id="submit-blocking-btn" class="w-full bg-green-500 text-white font-bold py-5 rounded-2xl shadow-lg shadow-green-500/20 btn-press text-lg">
+                            <i class="fas fa-phone mr-2"></i> โทรออกฟรี
+                        </button>
+                        <button class="back-to-reason w-full py-4 text-gray-500 text-sm hover:text-white transition">ยกเลิก</button>
+                    </div>
+                </div>
+
+                <!-- Photo UI (Hidden) -->
+                <div id="lights-form" class="hidden flex-1 flex flex-col">
+                    <div class="flex-1 flex items-center justify-center">
+                        <label class="w-full aspect-[3/4] bg-white/5 border-2 border-dashed border-white/20 rounded-3xl flex flex-col items-center justify-center relative overflow-hidden group hover:border-brand-yellow/50 transition cursor-pointer">
+                            <div class="text-center p-6 group-hover:scale-110 transition">
+                                <i class="fas fa-camera text-4xl text-gray-500 mb-4 block"></i>
+                                <span class="text-sm text-gray-400 font-bold">แตะเพื่อถ่ายรูป</span>
+                            </div>
+                            <img id="contact-image-preview" class="absolute inset-0 w-full h-full object-cover hidden">
+                            <input type="file" id="contact-image-upload" accept="image/*" class="hidden">
+                        </label>
+                    </div>
+                    <div class="mt-6 space-y-4">
+                        <button id="submit-lights-btn" class="w-full bg-brand-yellow text-brand-dark font-bold py-5 rounded-2xl shadow-lg btn-press text-lg">ส่งรูปภาพแจ้งเตือน</button>
+                        <button class="back-to-reason w-full py-3 text-gray-500 text-sm hover:text-white transition">ยกเลิก</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- OVERLAY: CALLING ANIMATION -->
+        <div id="calling-overlay" class="fixed inset-0 z-[60] bg-black/95 hidden flex-col items-center justify-between py-20 text-center">
+            <div>
+                <div class="w-24 h-24 mx-auto bg-gray-800 rounded-full border border-white/10 flex items-center justify-center mb-6 relative">
+                    <i class="fas fa-user-secret text-4xl text-white"></i>
+                    <div class="absolute inset-0 border-2 border-brand-yellow rounded-full opacity-0 animate-[ping_2s_infinite]"></div>
+                    <div class="absolute inset-[-10px] border border-brand-yellow/30 rounded-full opacity-0 animate-[ping_2s_infinite_0.5s]"></div>
+                </div>
+                <h2 class="text-3xl font-bold text-white mb-2">Connecting...</h2>
+                <p id="calling-status" class="text-brand-yellow font-mono text-xs tracking-widest uppercase">Secure Line Establishing</p>
+            </div>
+            <button onclick="location.reload()" class="w-20 h-20 bg-red-500 rounded-full flex items-center justify-center text-3xl text-white shadow-2xl btn-press"><i class="fas fa-phone-slash"></i></button>
+        </div>
+
+        <!-- OVERLAY: NOTIFICATIONS -->
+        <div id="noti-modal" class="fixed inset-0 z-50 bg-black/60 hidden flex items-end sm:items-center justify-center">
+            <div class="bg-white w-full max-w-sm sm:rounded-3xl rounded-t-3xl p-6 h-[70vh] flex flex-col animate-[slideUp_0.4s_ease-out]">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-bold font-display">Notifications</h2>
+                    <button id="close-noti-btn" class="w-8 h-8 bg-gray-100 rounded-full text-gray-500"><i class="fas fa-times"></i></button>
+                </div>
+                <div id="noti-list" class="flex-1 overflow-y-auto space-y-3 pb-6"></div>
+            </div>
+        </div>
+
+        <!-- OVERLAY: QR CODE -->
+        <div id="qr-modal" class="fixed inset-0 z-50 bg-brand-dark/95 hidden flex flex-col items-center justify-center p-8 text-center backdrop-blur-sm">
+            <h2 class="text-white text-2xl font-bold mb-2">Your ID Card</h2>
+            <p class="text-gray-400 text-sm mb-8" id="qr-car-name">...</p>
+            
+            <div class="p-2 bg-white rounded-3xl shadow-[0_0_50px_rgba(255,214,0,0.3)] mb-8 transform hover:scale-105 transition duration-500">
+                <div id="qrcode-display" class="bg-white p-4 rounded-2xl"></div>
+            </div>
+            
+            <div class="space-y-3 w-full max-w-xs">
+                <button id="simulate-scan-btn" class="w-full bg-white/10 border border-white/20 text-white font-bold py-4 rounded-2xl hover:bg-white/20 transition flex items-center justify-center gap-3">
+                    <i class="fas fa-eye text-brand-yellow"></i>
+                    <span>Guest View Preview</span>
+                </button>
+                <button id="close-modal-btn" class="w-full py-4 text-gray-500 font-bold text-sm">Close</button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, setDoc, doc, getDoc, addDoc, collection, query, where, onSnapshot, deleteDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
+
+        // CONFIG
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'park-q-default';
+        
+        let app, auth, db, storage, currentUserId;
+
+        // UI HELPERS
+        const showView = (id) => {
+            document.querySelectorAll('.view').forEach(el => { el.classList.remove('active'); setTimeout(()=>el.style.display='none',300); });
+            const target = document.getElementById(id);
+            target.style.display = (id === 'login-view' || id === 'dashboard-view' || id === 'contact-view') ? 'flex' : 'flex';
+            setTimeout(() => target.classList.add('active'), 10);
+        };
+
+        const showToast = (msg, error=false) => {
+            const t = document.getElementById('toast');
+            t.querySelector('span').textContent = msg;
+            t.querySelector('div').className = `w-6 h-6 rounded-full flex items-center justify-center text-xs ${error ? 'bg-red-500 text-white' : 'bg-brand-yellow text-brand-dark'}`;
+            t.querySelector('i').className = error ? 'fas fa-exclamation' : 'fas fa-check';
+            t.classList.remove('-translate-y-24', 'opacity-0');
+            setTimeout(() => t.classList.add('-translate-y-24', 'opacity-0'), 3000);
+        };
+
+        try {
+            app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+            storage = getStorage(app);
+            
+            // --- AUTH FLOW ---
+            onAuthStateChanged(auth, user => {
+                if(user) {
+                    currentUserId = user.uid;
+                    document.getElementById('user-email').textContent = user.email?.split('@')[0] || 'User';
+                    initDashboard();
+                    if(!window.location.hash.startsWith('#contact')) window.location.hash = '#dashboard';
+                } else {
+                    currentUserId = null;
+                    if(!window.location.hash.startsWith('#contact')) window.location.hash = '#login';
+                }
+                router();
+            });
+
+            if(typeof __initial_auth_token !== 'undefined' && __initial_auth_token) signInWithCustomToken(auth, __initial_auth_token);
+
+            // --- ROUTING ---
+            const router = () => {
+                const hash = window.location.hash;
+                document.getElementById('loading-view').classList.remove('active');
+                setTimeout(()=>document.getElementById('loading-view').style.display='none', 300);
+
+                if (hash.startsWith('#contact')) {
+                    const p = new URLSearchParams(hash.split('?')[1]);
+                    if(p.get('carId') && p.get('ownerId')) {
+                        showView('contact-view');
+                        initContact(p.get('ownerId'), p.get('carId'));
+                        return;
+                    }
+                }
+                
+                if (!currentUserId) {
+                    if(!hash.startsWith('#contact')) showView('login-view');
+                } else {
+                    if (hash === '#add-car') showView('add-car-view');
+                    else showView('dashboard-view');
+                }
+            };
+            window.onhashchange = router;
+
+            // --- DASHBOARD LOGIC ---
+            function initDashboard() {
+                // Cars
+                onSnapshot(query(collection(db, `artifacts/${appId}/users/${currentUserId}/cars`)), sn => {
+                    const list = document.getElementById('car-list');
+                    list.innerHTML = '';
+                    let notifications = [];
+                    
+                    if(sn.empty) {
+                        list.innerHTML = `<div class="p-8 text-center text-gray-400 border-2 border-dashed border-gray-200 rounded-3xl bg-white"><i class="fas fa-plus text-2xl mb-2"></i><br>Add your first car</div>`;
+                    }
+
+                    sn.forEach(d => {
+                        const c = d.data();
+                        const el = document.createElement('div');
+                        
+                        // Status Badge Logic
+                        let statusHtml = '<span class="text-[10px] font-bold text-green-600 bg-green-100 px-2 py-1 rounded-md">SECURE</span>';
+                        if(c.insDate) {
+                            const days = Math.floor((new Date(c.insDate) - new Date()) / (86400000));
+                            if(days < 30) {
+                                statusHtml = '<span class="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-1 rounded-md animate-pulse">EXPIRING</span>';
+                                notifications.push({ car: c.name, days });
+                            }
+                        }
+
+                        el.className = "bg-white p-5 rounded-3xl shadow-sm border border-gray-100 flex justify-between items-center group active:scale-[0.98] transition-transform duration-200";
+                        el.innerHTML = `
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 bg-brand-light rounded-2xl flex items-center justify-center text-xl text-gray-400 group-hover:text-brand-yellow group-hover:bg-brand-dark transition-colors duration-300">
+                                    <i class="fas fa-car-side"></i>
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <h3 class="font-bold text-brand-dark">${c.name}</h3>
+                                        ${statusHtml}
+                                    </div>
+                                    <p class="text-xs text-gray-400 font-mono tracking-wider">${c.plate}</p>
+                                </div>
+                            </div>
+                            <button class="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-brand-yellow hover:text-brand-dark transition-colors shadow-sm qr-btn">
+                                <i class="fas fa-qrcode"></i>
+                            </button>
+                        `;
+                        
+                        el.querySelector('.qr-btn').onclick = () => showQR(c.name, d.id);
+                        list.appendChild(el);
+                    });
+                    updateNoti(notifications);
+                });
+
+                // Parking
+                onSnapshot(doc(db, `artifacts/${appId}/users/${currentUserId}/parkingStatus/current`), doc => {
+                    const now = document.getElementById('park-now-section');
+                    const info = document.getElementById('parked-info-section');
+                    document.getElementById('parking-form').classList.add('hidden'); // Ensure modal closed
+                    
+                    if(doc.exists()) {
+                        const d = doc.data();
+                        now.classList.add('hidden');
+                        info.classList.remove('hidden');
+                        document.getElementById('parked-location').textContent = d.location || 'Unknown';
+                        document.getElementById('parked-floor').textContent = d.floor || '-';
+                        document.getElementById('parked-pillar').textContent = d.pillar || '-';
+                        if(d.imageUrl) document.getElementById('parked-image').src = d.imageUrl;
+                        
+                        // Timer
+                        if(window.parkTimer) clearInterval(window.parkTimer);
+                        if(d.createdAt) {
+                            const start = d.createdAt.toDate();
+                            const updateTimer = () => {
+                                const diff = new Date() - start;
+                                const h = Math.floor(diff/3600000);
+                                const m = Math.floor((diff%3600000)/60000);
+                                document.getElementById('park-timer').textContent = `${h}h ${m}m`;
+                            };
+                            updateTimer();
+                            window.parkTimer = setInterval(updateTimer, 60000);
+                        }
+                    } else {
+                        now.classList.remove('hidden');
+                        info.classList.add('hidden');
+                    }
+                });
+            }
+
+            function updateNoti(list) {
+                const badge = document.getElementById('noti-badge');
+                const container = document.getElementById('noti-list');
+                container.innerHTML = '';
+                
+                if(list.length > 0) {
+                    badge.classList.remove('hidden');
+                    list.forEach(n => {
+                        const div = document.createElement('div');
+                        div.className = "bg-red-50 p-4 rounded-2xl flex justify-between items-center";
+                        div.innerHTML = `<div><div class="font-bold text-red-800 text-sm">${n.car}</div><div class="text-xs text-red-500">ประกันหมดใน ${n.days} วัน</div></div><button class="px-3 py-1 bg-red-500 text-white text-xs font-bold rounded-lg shadow-lg shadow-red-500/30">ต่ออายุ</button>`;
+                        div.querySelector('button').onclick = () => showToast("Opening Insurance Partner...");
+                        container.appendChild(div);
+                    });
+                } else {
+                    badge.classList.add('hidden');
+                    container.innerHTML = `<div class="text-center text-gray-400 py-10"><i class="far fa-bell-slash text-2xl mb-2"></i><p class="text-xs">No new notifications</p></div>`;
+                }
+            }
+
+            function showQR(name, id) {
+                const m = document.getElementById('qr-modal');
+                const d = document.getElementById('qrcode-display');
+                d.innerHTML = '';
+                // Dummy URL to prevent overflow in preview
+                const url = `https://park-q.app/c/${id}`; 
+                new QRCode(d, { text: url, width: 180, height: 180 });
+                document.getElementById('qr-car-name').textContent = name;
+                m.classList.remove('hidden');
+                
+                document.getElementById('simulate-scan-btn').onclick = () => {
+                    m.classList.add('hidden');
+                    window.location.hash = `#contact?ownerId=${currentUserId}&carId=${id}`;
+                };
+            }
+
+            // --- CONTACT LOGIC ---
+            function initContact(oid, cid) {
+                getDoc(doc(db, `artifacts/${appId}/users/${oid}/cars/${cid}`)).then(d => {
+                    document.getElementById('contact-car-plate').textContent = d.exists() ? d.data().plate : 'Unknown';
+                });
+
+                // UI Toggles
+                const btns = document.querySelectorAll('#reason-selection button');
+                const forms = { 'blocking': 'blocking-form', 'lights': 'lights-form' };
+                
+                btns.forEach(b => b.onclick = () => {
+                    document.getElementById('reason-selection').classList.add('hidden');
+                    document.getElementById(forms[b.dataset.reason]).classList.remove('hidden');
+                    document.getElementById(forms[b.dataset.reason]).classList.add('flex');
+                });
+
+                document.querySelectorAll('.back-to-reason').forEach(b => b.onclick = () => {
+                    document.getElementById('blocking-form').classList.add('hidden');
+                    document.getElementById('blocking-form').classList.remove('flex');
+                    document.getElementById('lights-form').classList.add('hidden');
+                    document.getElementById('lights-form').classList.remove('flex');
+                    document.getElementById('reason-selection').classList.remove('hidden');
+                });
+
+                // Call Simulation
+                document.getElementById('submit-blocking-btn').onclick = () => {
+                    const p = document.getElementById('contact-phone').value;
+                    if(!p) return showToast('กรุณากรอกเบอร์โทร', true);
+                    
+                    const ol = document.getElementById('calling-overlay');
+                    const st = document.getElementById('calling-status');
+                    ol.classList.remove('hidden');
+                    ol.classList.add('flex');
+                    
+                    setTimeout(() => st.textContent = "Encrypting Number...", 1500);
+                    setTimeout(() => st.textContent = "Dialing Owner...", 3000);
+                    setTimeout(() => st.textContent = "CONNECTED", 4500);
+                    setTimeout(() => { ol.classList.add('hidden'); showToast("โทรสำเร็จ!"); window.location.hash='#login'; }, 6000);
+                };
+            }
+
+            // --- EVENT BINDINGS ---
+            // Login
+            let isReg = false;
+            document.getElementById('toggle-auth-btn').onclick = (e) => {
+                isReg = !isReg;
+                const span = e.currentTarget.querySelector('span');
+                const btn = document.getElementById('auth-action-btn').querySelector('span');
+                if(isReg) { span.textContent = 'เข้าสู่ระบบ'; btn.textContent = 'สมัครสมาชิก'; }
+                else { span.textContent = 'สมัครสมาชิก'; btn.textContent = 'เข้าสู่ระบบ'; }
+            };
+            document.getElementById('auth-action-btn').onclick = async () => {
+                const e = document.getElementById('email').value;
+                const p = document.getElementById('password').value;
+                if(!e||!p) return showToast('กรอกข้อมูลให้ครบ', true);
+                try {
+                    if(isReg) await createUserWithEmailAndPassword(auth, e, p);
+                    else await signInWithEmailAndPassword(auth, e, p);
+                } catch(err) { showToast(err.code, true); }
+            };
+            document.getElementById('google-signin-btn').onclick = () => signInWithPopup(auth, new GoogleAuthProvider()).catch(e => showToast(e.code, true));
+            document.getElementById('logout-btn').onclick = () => signOut(auth);
+
+            // Add Car
+            document.getElementById('show-add-car-btn').onclick = () => window.location.hash = '#add-car';
+            document.getElementById('cancel-add-car-btn').onclick = () => window.location.hash = '#dashboard';
+            document.getElementById('save-car-btn').onclick = async () => {
+                const n = document.getElementById('car-name').value;
+                const p = document.getElementById('car-plate').value;
+                if(!n||!p) return showToast('กรอกข้อมูลให้ครบ', true);
+                await addDoc(collection(db, `artifacts/${appId}/users/${currentUserId}/cars`), {
+                    name: n, plate: p,
+                    prbDate: document.getElementById('car-prb-date').value,
+                    insDate: document.getElementById('car-ins-date').value,
+                    ownerId: currentUserId
+                });
+                showToast('บันทึกสำเร็จ');
+                window.location.hash = '#dashboard';
+            };
+
+            // Parking
+            document.getElementById('show-park-form-btn').onclick = () => {
+                document.getElementById('parking-form').classList.remove('hidden');
+                document.getElementById('parking-form').classList.add('flex');
+                if(navigator.geolocation) navigator.geolocation.getCurrentPosition(() => {
+                    document.getElementById('gps-status').innerHTML = `<i class="fas fa-check-circle text-green-500"></i> GPS LOCKED`;
+                    document.getElementById('park-location').value = "Siam Paragon (GPS)";
+                });
+            };
+            document.getElementById('cancel-parking-btn').onclick = () => {
+                document.getElementById('parking-form').classList.add('hidden');
+                document.getElementById('parking-form').classList.remove('flex');
+            };
+            document.getElementById('save-parking-btn').onclick = async () => {
+                const l = document.getElementById('park-location').value;
+                const f = document.getElementById('park-floor').value;
+                const p = document.getElementById('park-pillar').value;
+                const img = document.getElementById('park-image-upload').files[0];
+                if(!l) return showToast('ระบุสถานที่', true);
+                
+                let url = null;
+                if(img) {
+                    const r = ref(storage, `artifacts/${appId}/users/${currentUserId}/parking/${Date.now()}`);
+                    const s = await uploadBytes(r, img);
+                    url = await getDownloadURL(s.ref);
+                }
+                
+                await setDoc(doc(db, `artifacts/${appId}/users/${currentUserId}/parkingStatus/current`), {
+                    location: l, floor: f, pillar: p, imageUrl: url, createdAt: serverTimestamp()
+                });
+                showToast('Saved!');
+            };
+            
+            // Image Preview
+            document.getElementById('park-image-upload').onchange = (e) => {
+                const f = e.target.files[0];
+                if(f) {
+                    const r = new FileReader();
+                    r.onload = ev => {
+                        const img = document.getElementById('image-preview');
+                        img.src = ev.target.result;
+                        img.classList.remove('hidden');
+                        
+                        // Fake OCR
+                        setTimeout(() => {
+                            document.getElementById('park-floor').value = "M Floor";
+                            document.getElementById('park-pillar').value = "P24";
+                            showToast("AI Detected: M Floor, P24");
+                        }, 1500);
+                    };
+                    r.readAsDataURL(f);
+                }
+            };
+
+            document.getElementById('clear-parking-btn').onclick = async () => {
+                await deleteDoc(doc(db, `artifacts/${appId}/users/${currentUserId}/parkingStatus/current`));
+                showToast('Checked Out');
+            };
+
+            // Noti & QR Modals
+            document.getElementById('noti-btn').onclick = () => document.getElementById('noti-modal').classList.remove('hidden');
+            document.getElementById('close-noti-btn').onclick = () => document.getElementById('noti-modal').classList.add('hidden');
+            document.getElementById('close-modal-btn').onclick = () => document.getElementById('qr-modal').classList.add('hidden');
+
+        } catch (e) { console.error(e); }
+    </script>
+</body>
+</html>
