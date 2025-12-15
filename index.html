@@ -147,8 +147,10 @@
             <h1 class="text-4xl font-display font-bold tracking-tighter mb-2">Park<span class="text-brand-yellow">Q</span></h1>
             <div class="flex items-center gap-2 text-xs font-mono text-gray-400">
                 <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                SYSTEM ONLINE
+                SYSTEM STARTING...
             </div>
+            <!-- Emergency Skip Button -->
+            <button onclick="forceStart()" class="absolute bottom-10 text-gray-600 text-xs underline">Skip Loading</button>
         </div>
 
         <!-- VIEW 2: LOGIN -->
@@ -532,17 +534,52 @@
         import { getFirestore, setDoc, doc, getDoc, addDoc, collection, query, where, onSnapshot, deleteDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
         import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
-        // CONFIG
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'park-q-default';
+        // ============================================================
+        // 🔧 ส่วนตั้งค่า FIREBASE (สำคัญมากสำหรับการนำไปใช้จริง)
+        // ============================================================
         
+        // 1. ถ้าคุณจะนำไปใช้บนเว็บตัวเอง (GitHub Pages ฯลฯ) 
+        // ให้ไปที่ Firebase Console > Project Settings > General > Your apps
+        // ก๊อปปี้ค่า config มาวางแทนที่ตรงนี้ครับ:
+        const myFirebaseConfig = {
+            // apiKey: "AIzaSy...",
+            // authDomain: "your-app.firebaseapp.com",
+            // projectId: "your-app",
+            // storageBucket: "your-app.appspot.com",
+            // messagingSenderId: "...",
+            // appId: "..."
+        };
+
+        // 2. ระบบเลือก Config อัตโนมัติ (ไม่ต้องแก้ตรงนี้)
+        let firebaseConfig;
+        let appId = 'park-q-default';
+
+        if (typeof __firebase_config !== 'undefined') {
+            // กรณีรันใน Preview ของแชท (ใช้ Config อัตโนมัติ)
+            firebaseConfig = JSON.parse(__firebase_config);
+            if(typeof __app_id !== 'undefined') appId = __app_id;
+        } else {
+            // กรณีรันบนเว็บจริง (ใช้ Config ของคุณ)
+            firebaseConfig = myFirebaseConfig;
+            
+            // เช็คว่าผู้ใช้ใส่ Key หรือยัง
+            if (!firebaseConfig.apiKey) {
+                alert("⚠️ ยังไม่ได้ตั้งค่า Firebase!\n\nกรุณาเปิดไฟล์โค้ด แล้วแก้ตัวแปร 'myFirebaseConfig' ให้เป็นค่าจาก Firebase Project ของคุณก่อนครับ");
+            }
+        }
+        // ============================================================
+
         let app, auth, db, storage, currentUserId;
+        let isAuthResolved = false;
 
         // UI HELPERS
         const showView = (id) => {
-            // Hide loading view forcefully when switching views
-            document.getElementById('loading-view').style.display = 'none';
-            document.getElementById('loading-view').classList.remove('active');
+            // Force hide loading view
+            const loader = document.getElementById('loading-view');
+            if (loader) {
+                loader.style.opacity = '0';
+                setTimeout(() => { loader.style.display = 'none'; }, 300);
+            }
 
             document.querySelectorAll('.view').forEach(el => { 
                 if (el.id !== 'loading-view') {
@@ -551,8 +588,10 @@
                 }
             });
             const target = document.getElementById(id);
-            target.style.display = (id === 'login-view' || id === 'dashboard-view' || id === 'contact-view') ? 'flex' : 'flex';
-            setTimeout(() => target.classList.add('active'), 10);
+            if (target) {
+                target.style.display = (id === 'login-view' || id === 'dashboard-view' || id === 'contact-view') ? 'flex' : 'flex';
+                setTimeout(() => target.classList.add('active'), 10);
+            }
         };
 
         const showToast = (msg, error=false) => {
@@ -562,6 +601,14 @@
             t.querySelector('i').className = error ? 'fas fa-exclamation' : 'fas fa-check';
             t.classList.remove('-translate-y-24', 'opacity-0');
             setTimeout(() => t.classList.add('-translate-y-24', 'opacity-0'), 3000);
+        };
+
+        // EXPOSE FORCE START TO WINDOW
+        window.forceStart = () => {
+            console.log("Force starting app...");
+            isAuthResolved = true;
+            if(!currentUserId) showView('login-view');
+            else showView('dashboard-view');
         };
 
         try {
@@ -595,6 +642,7 @@
 
             // --- AUTH FLOW ---
             onAuthStateChanged(auth, user => {
+                isAuthResolved = true;
                 if(user) {
                     currentUserId = user.uid;
                     document.getElementById('user-email').textContent = user.email?.split('@')[0] || 'User';
@@ -611,17 +659,13 @@
 
             if(typeof __initial_auth_token !== 'undefined' && __initial_auth_token) signInWithCustomToken(auth, __initial_auth_token);
 
-            // Safety timeout: If auth takes too long (e.g. 3s), force login view
+            // AGGRESSIVE TIMEOUT (1.5s)
             setTimeout(() => {
-                const loader = document.getElementById('loading-view');
-                if (loader && loader.style.display !== 'none') {
-                    console.log("Auth timed out, forcing login view");
-                    if (!currentUserId) {
-                        window.location.hash = '#login';
-                        router();
-                    }
+                if (!isAuthResolved) {
+                    console.log("Auth taking too long. Forcing start.");
+                    window.forceStart();
                 }
-            }, 3000);
+            }, 1500);
 
             // --- DASHBOARD LOGIC ---
             function initDashboard() {
@@ -889,7 +933,13 @@
             document.getElementById('close-noti-btn').onclick = () => document.getElementById('noti-modal').classList.add('hidden');
             document.getElementById('close-modal-btn').onclick = () => document.getElementById('qr-modal').classList.add('hidden');
 
-        } catch (e) { console.error(e); }
+        } catch (e) { 
+            console.error(e); 
+            // Fallback for errors
+            if (document.getElementById('loading-view')) {
+                document.getElementById('loading-view').innerHTML += `<p class="text-red-500 text-xs mt-2">${e.message}</p>`;
+            }
+        }
     </script>
 </body>
 </html>
