@@ -146,9 +146,16 @@
     <!-- GLOBAL ERROR TRAP (ดัก Error ทุกอย่าง) -->
     <script>
         window.onerror = function(message, source, lineno, colno, error) {
-            document.getElementById('critical-error').style.display = 'flex';
-            document.getElementById('error-detail').innerText = `${message}\nLine: ${lineno}`;
-            document.getElementById('loading-view').style.display = 'none';
+            const errDiv = document.getElementById('critical-error');
+            const errDetail = document.getElementById('error-detail');
+            const loader = document.getElementById('loading-view');
+            
+            if (errDiv && errDetail) {
+                errDiv.style.display = 'flex';
+                errDetail.innerText = `${message}\nSource: ${source}:${lineno}`;
+            }
+            if (loader) loader.style.display = 'none';
+            console.error("Global Error Caught:", message);
         };
     </script>
 
@@ -567,11 +574,8 @@
         import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
         // ============================================================
-        // 🔧 ส่วนตั้งค่า FIREBASE (Config)
+        // 🔧 ส่วนตั้งค่า FIREBASE (Hardcoded for Production)
         // ============================================================
-        
-        // 🚨 สำคัญมาก: ถ้าคุณเอาโค้ดนี้ไปรันบน GitHub Pages หรือ Server ของตัวเอง
-        // คุณต้องเปลี่ยนค่าข้างล่างนี้ให้เป็นของโปรเจกต์คุณเอง!
         
         const myFirebaseConfig = {
             apiKey: "AIzaSyB2vFDc5YjDMlDpkzquE57q2inbFqhO8zA",
@@ -583,23 +587,8 @@
             measurementId: "G-BQM13JK9PG"
         };
 
-        // ระบบเลือก Config อัตโนมัติ (Hybrid Config System)
-        let firebaseConfig;
-        let appId = 'park-q-default';
-
-        if (typeof __firebase_config !== 'undefined') {
-            // กรณีรันใน Preview ของแชท (ใช้ Config อัตโนมัติ)
-            firebaseConfig = JSON.parse(__firebase_config);
-            if(typeof __app_id !== 'undefined') appId = __app_id;
-        } else {
-            // กรณีรันบนเว็บจริง (ใช้ Config ที่คุณใส่ด้านบน)
-            firebaseConfig = myFirebaseConfig;
-            
-            // เช็คว่าผู้ใช้ใส่ Key หรือยัง
-            if (!firebaseConfig.apiKey) {
-                alert("⚠️ ยังไม่ได้ตั้งค่า Firebase!\n\nกรุณาเปิดไฟล์โค้ด แล้วแก้ตัวแปร 'myFirebaseConfig' ให้เป็นค่าจาก Firebase Project ของคุณก่อนครับ");
-            }
-        }
+        const firebaseConfig = myFirebaseConfig;
+        const appId = 'park-q-default';
         // ============================================================
 
         let app, auth, db, storage, currentUserId;
@@ -645,11 +634,6 @@
         };
 
         try {
-            // Validate Config
-            if (!firebaseConfig || !firebaseConfig.apiKey) {
-                throw new Error("Firebase Config is missing! Please check the code.");
-            }
-
             app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
@@ -694,11 +678,8 @@
                 // Call router immediately to update view
                 router();
             }, (error) => {
-                // If auth fails completely
                 throw new Error("Auth Error: " + error.message);
             });
-
-            if(typeof __initial_auth_token !== 'undefined' && __initial_auth_token) signInWithCustomToken(auth, __initial_auth_token);
 
             // AGGRESSIVE TIMEOUT (1.5s)
             setTimeout(() => {
