@@ -542,12 +542,13 @@
         // ให้ไปที่ Firebase Console > Project Settings > General > Your apps
         // ก๊อปปี้ค่า config มาวางแทนที่ตรงนี้ครับ:
         const myFirebaseConfig = {
-            // apiKey: "AIzaSy...",
-            // authDomain: "your-app.firebaseapp.com",
-            // projectId: "your-app",
-            // storageBucket: "your-app.appspot.com",
-            // messagingSenderId: "...",
-            // appId: "..."
+            apiKey: "AIzaSyB2vFDc5YjDMlDpkzquE57q2inbFqhO8zA",
+            authDomain: "parkq-1ad8f.firebaseapp.com",
+            projectId: "parkq-1ad8f",
+            storageBucket: "parkq-1ad8f.firebasestorage.app",
+            messagingSenderId: "861135790012",
+            appId: "1:861135790012:web:6d527805dac14909dc15b9",
+            measurementId: "G-BQM13JK9PG"
         };
 
         // 2. ระบบเลือก Config อัตโนมัติ (ไม่ต้องแก้ตรงนี้)
@@ -933,13 +934,7 @@
             document.getElementById('close-noti-btn').onclick = () => document.getElementById('noti-modal').classList.add('hidden');
             document.getElementById('close-modal-btn').onclick = () => document.getElementById('qr-modal').classList.add('hidden');
 
-        } catch (e) { 
-            console.error(e); 
-            // Fallback for errors
-            if (document.getElementById('loading-view')) {
-                document.getElementById('loading-view').innerHTML += `<p class="text-red-500 text-xs mt-2">${e.message}</p>`;
-            }
-        }
+        } catch (e) { console.error(e); }
     </script>
 </body>
 </html>
