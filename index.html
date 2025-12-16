@@ -4,15 +4,22 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#FFD600">
+    
+    <!-- PWA Settings -->
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Park-Q">
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3202/3202926.png"> 
+    
     <title>Park-Q | Intelligent Parking</title>
     
     <!-- Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     
-    <!-- Fonts & Icons -->
+    <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;700;800&family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <!-- Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
@@ -20,14 +27,12 @@
         .view { display: none; opacity: 0; transition: opacity 0.3s ease; }
         .view.active { display: flex; opacity: 1; }
         
-        /* Loading Screen (Inline for safety) */
         #loading-view {
             position: fixed; inset: 0; z-index: 9999;
             background-color: #0A0A0A; color: white;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
         }
 
-        /* Error Screen */
         #critical-error {
             display: none; position: fixed; inset: 0; z-index: 10000;
             background-color: #7f1d1d; color: white;
@@ -35,23 +40,54 @@
             padding: 20px; text-align: center;
         }
 
-        /* In-App Browser Warning */
         #in-app-warning {
             display: none; position: fixed; top: 0; left: 0; width: 100%;
             background: #FFD600; color: #000; padding: 12px; z-index: 9998;
             font-size: 14px; font-weight: bold; text-align: center;
             box-shadow: 0 4px 10px rgba(0,0,0,0.2);
         }
+
+        /* Install Prompt Style */
+        #install-prompt {
+            display: none;
+            position: fixed; bottom: 80px; left: 20px; right: 20px;
+            background: white; color: black; padding: 15px;
+            border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            z-index: 9000; animation: slideUp 0.5s ease;
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
     </style>
 </head>
 <body class="text-white min-h-screen flex flex-col fixed inset-0 w-full h-full bg-black">
 
     <!-- 1. IN-APP BROWSER WARNING -->
     <div id="in-app-warning">
-        <i class="fas fa-exclamation-triangle"></i> เพื่อการใช้งานที่สมบูรณ์ กรุณากดปุ่ม 3 จุดด้านบน แล้วเลือก <strong>"เปิดในเบราว์เซอร์"</strong>
+        <i class="fas fa-exclamation-triangle"></i> กรุณากดปุ่ม 3 จุดด้านบน ↗️ แล้วเลือก <strong>"เปิดในเบราว์เซอร์"</strong> เพื่อใช้งานเต็มระบบ
     </div>
 
-    <!-- 2. GLOBAL ERROR UI -->
+    <!-- 2. PWA INSTALL PROMPT -->
+    <div id="install-prompt">
+        <div class="flex justify-between items-start">
+            <div class="flex gap-3">
+                <div class="w-12 h-12 bg-yellow-400 rounded-xl flex items-center justify-center text-2xl text-black shadow-md">
+                    <i class="fas fa-car-side"></i>
+                </div>
+                <div>
+                    <h3 class="font-bold text-lg">ติดตั้ง Park-Q</h3>
+                    <p class="text-xs text-gray-500">เพื่อการใช้งานที่สะดวกและรวดเร็วขึ้น</p>
+                </div>
+            </div>
+            <button onclick="document.getElementById('install-prompt').style.display='none'" class="text-gray-400"><i class="fas fa-times"></i></button>
+        </div>
+        <button id="install-btn-action" class="w-full bg-black text-white font-bold py-3 rounded-xl mt-4 shadow-lg">
+            ติดตั้งลงเครื่อง (Install App)
+        </button>
+        <p id="ios-install-hint" class="text-xs text-gray-500 mt-2 text-center hidden">
+            กดปุ่ม <i class="fas fa-share-square"></i> ด้านล่าง แล้วเลือก <strong>"เพิ่มไปยังหน้าจอโฮม" (Add to Home Screen)</strong>
+        </p>
+    </div>
+
+    <!-- 3. GLOBAL ERROR UI -->
     <div id="critical-error">
         <i class="fas fa-bug text-5xl mb-4"></i>
         <h2 class="text-2xl font-bold mb-2">เกิดข้อผิดพลาด</h2>
@@ -59,13 +95,13 @@
         <button onclick="window.location.reload()" class="bg-white text-red-900 px-6 py-2 rounded-full font-bold">ลองใหม่</button>
     </div>
 
-    <!-- 3. TOAST -->
+    <!-- 4. TOAST -->
     <div id="toast" class="fixed top-12 left-1/2 -translate-x-1/2 z-[100] transition-all duration-300 transform -translate-y-32 opacity-0 flex items-center gap-3 px-5 py-3 rounded-full shadow-2xl bg-gray-800 text-white min-w-[200px] justify-center border border-gray-700">
         <i class="fas fa-info-circle text-[#FFD600]"></i>
         <span id="toast-msg" class="font-medium text-sm">Notification</span>
     </div>
 
-    <!-- 4. SPLASH SCREEN (Fail-Safe) -->
+    <!-- 5. SPLASH SCREEN -->
     <div id="loading-view">
         <div class="w-20 h-20 bg-[#FFD600] rounded-2xl flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(255,214,0,0.4)] animate-bounce">
             <i class="fas fa-car-side text-4xl text-black"></i>
@@ -163,6 +199,11 @@
                     </div>
                 </div>
             </div>
+            
+            <!-- Install App Promo (In Dashboard) -->
+            <div class="px-6 pb-6 text-center">
+                 <button onclick="checkInstallApp()" class="text-xs text-gray-400 underline hover:text-black">ติดตั้ง Park-Q ไว้บนเครื่อง</button>
+            </div>
         </div>
 
         <!-- VIEW: CONTACT -->
@@ -207,35 +248,17 @@
 
     </div>
 
-    <!-- SCRIPT -->
+    <!-- JAVASCRIPT LOGIC -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, onSnapshot, collection, addDoc, query, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, GoogleAuthProvider, signInWithRedirect, getRedirectResult } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+        import { getFirestore, setDoc, doc, getDoc, addDoc, collection, query, where, onSnapshot, deleteDoc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
 
-        // --- ERROR TRAP ---
-        window.onerror = function(msg, src, line, col, error) {
-            document.getElementById('loading-view').style.display = 'none';
-            document.getElementById('critical-error').style.display = 'flex';
-            document.getElementById('error-text').innerText = `${msg}\nLine: ${line}`;
-            return false;
-        };
-        
-        window.onunhandledrejection = function(event) {
-            document.getElementById('loading-view').style.display = 'none';
-            document.getElementById('critical-error').style.display = 'flex';
-            document.getElementById('error-text').innerText = "Promise Error: " + event.reason;
-        };
-
-        // --- LOG HELPER ---
-        const logStatus = (msg) => {
-            console.log(msg);
-            const el = document.getElementById('loading-log');
-            if(el) el.innerText = msg;
-        };
-
-        // --- CONFIG ---
-        const firebaseConfig = {
+        // ============================================
+        // FIREBASE CONFIG
+        // ============================================
+        const myFirebaseConfig = {
             apiKey: "AIzaSyB2vFDc5YjDMlDpkzquE57q2inbFqhO8zA",
             authDomain: "parkq-1ad8f.firebaseapp.com",
             projectId: "parkq-1ad8f",
@@ -244,8 +267,44 @@
             appId: "1:861135790012:web:6d527805dac14909dc15b9",
             measurementId: "G-BQM13JK9PG"
         };
+        const firebaseConfig = myFirebaseConfig;
+        const appId = 'park-q-default';
 
-        let auth, db, user;
+        let app, auth, db, storage, currentUserId;
+        let deferredPrompt; // For PWA Install
+
+        // --- PWA INSTALL LOGIC ---
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            // Show custom install UI if needed, or wait for user to click button
+            console.log("PWA Ready to install");
+        });
+
+        window.checkInstallApp = () => {
+            // Check if iOS
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            
+            if (isIOS) {
+                document.getElementById('install-prompt').style.display = 'block';
+                document.getElementById('install-btn-action').style.display = 'none';
+                document.getElementById('ios-install-hint').classList.remove('hidden');
+            } else if (deferredPrompt) {
+                document.getElementById('install-prompt').style.display = 'block';
+                document.getElementById('install-btn-action').onclick = () => {
+                    deferredPrompt.prompt();
+                    deferredPrompt.userChoice.then((choiceResult) => {
+                        if (choiceResult.outcome === 'accepted') {
+                            console.log('User accepted the install prompt');
+                        }
+                        deferredPrompt = null;
+                        document.getElementById('install-prompt').style.display = 'none';
+                    });
+                };
+            } else {
+                showToast("แอปรองรับการติดตั้งแล้ว (อาจติดตั้งไปแล้ว)");
+            }
+        };
 
         // --- GLOBAL HELPERS ---
         window.forceStart = () => {
@@ -268,6 +327,13 @@
             setTimeout(() => t.classList.add('opacity-0', '-translate-y-32'), 3000);
         }
 
+        // --- LOG HELPER ---
+        const logStatus = (msg) => {
+            console.log(msg);
+            const el = document.getElementById('loading-log');
+            if(el) el.innerText = msg;
+        };
+
         // --- INIT ---
         async function init() {
             // 1. Check UA for LINE
@@ -280,9 +346,10 @@
             // 2. Firebase Init
             try {
                 logStatus("Connecting to Firebase...");
-                const app = initializeApp(firebaseConfig);
+                app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
+                storage = getStorage(app);
                 logStatus("Firebase Connected");
 
                 // 3. Router Check
@@ -302,9 +369,9 @@
                                 if(s.exists()) document.getElementById('contact-plate').innerText = s.data().plate;
                             }).catch(err => console.error("Car fetch error", err));
                         }
-                        return true; // Handled
+                        return true; 
                     }
-                    return false; // Not handled
+                    return false;
                 };
 
                 // 4. Auth State
@@ -317,10 +384,12 @@
 
                     if (u) {
                         user = u;
+                        currentUserId = u.uid;
                         document.getElementById('user-display').innerText = u.email.split('@')[0];
                         showView('dashboard-view');
                         setupDashboard();
                     } else {
+                        currentUserId = null;
                         showView('login-view');
                     }
                 });
@@ -332,7 +401,7 @@
 
         // --- DASHBOARD ---
         function setupDashboard() {
-            const userId = user.uid;
+            const userId = currentUserId;
             // Listen to parking
             onSnapshot(doc(db, `artifacts/park-q-default/users/${userId}/parkingStatus/current`), (doc) => {
                 if(doc.exists()) {
@@ -377,18 +446,17 @@
                         const display = document.getElementById('qrcode-display');
                         display.innerHTML = '';
                         
-                        // สร้าง URL สำหรับ QR Code (ใช้ URL ปัจจุบัน + Hash)
+                        // Use actual GitHub URL for QR
                         const currentUrl = window.location.href.split('#')[0];
                         const fullUrl = `${currentUrl}#contact?ownerId=${userId}&carId=${id}`;
                         
                         new QRCode(display, { text: fullUrl, width: 180, height: 180 });
                         document.getElementById('qr-car-name').innerText = name;
                         
-                        // ผูกปุ่มจำลอง
                         document.getElementById('simulate-scan-btn').onclick = () => {
                             modal.classList.add('hidden');
                             window.location.hash = `#contact?ownerId=${userId}&carId=${id}`;
-                            window.location.reload(); // Reload to trigger router fresh
+                            window.location.reload(); 
                         };
                         
                         modal.classList.remove('hidden');
@@ -418,8 +486,17 @@
         };
 
         document.getElementById('google-btn').onclick = async () => {
-            try { await signInWithPopup(auth, new GoogleAuthProvider()); }
-            catch(err) { showToast("Login Error: " + err.code, true); }
+            const ua = navigator.userAgent.toLowerCase();
+            const isMobile = /iphone|ipad|ipod|android/i.test(ua);
+            
+            // On mobile, try redirect to handle in-app browsers better
+            if (isMobile) {
+                try { await signInWithRedirect(auth, new GoogleAuthProvider()); }
+                catch(err) { showToast("Login Error: " + err.code, true); }
+            } else {
+                try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+                catch(err) { showToast("Login Error: " + err.code, true); }
+            }
         };
 
         document.getElementById('logout-btn').onclick = () => signOut(auth);
@@ -429,7 +506,7 @@
             const f = prompt("ชั้น?");
             const z = prompt("โซน?");
             if(l) {
-                await setDoc(doc(db, `artifacts/park-q-default/users/${user.uid}/parkingStatus/current`), {
+                await setDoc(doc(db, `artifacts/park-q-default/users/${currentUserId}/parkingStatus/current`), {
                     location: l, floor: f, pillar: z, createdAt: new Date()
                 });
             }
@@ -437,7 +514,7 @@
 
         document.getElementById('checkout-btn').onclick = async () => {
             if(confirm("เอารถออกแล้ว?")) {
-                await deleteDoc(doc(db, `artifacts/park-q-default/users/${user.uid}/parkingStatus/current`));
+                await deleteDoc(doc(db, `artifacts/park-q-default/users/${currentUserId}/parkingStatus/current`));
             }
         };
 
@@ -445,8 +522,8 @@
             const n = prompt("ชื่อรถ (เช่น น้องขาว)");
             const p = prompt("ทะเบียนรถ");
             if(n && p) {
-                await addDoc(collection(db, `artifacts/park-q-default/users/${user.uid}/cars`), {
-                    name: n, plate: p, ownerId: user.uid
+                await addDoc(collection(db, `artifacts/park-q-default/users/${currentUserId}/cars`), {
+                    name: n, plate: p, ownerId: currentUserId
                 });
             }
         };
